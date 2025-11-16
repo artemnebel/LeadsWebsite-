@@ -7,16 +7,28 @@ exports.handler = async (event) => {
   }
 
   try {
+    // Parse the request body to get quantity
+    let quantity = 1;
+    try {
+      const body = JSON.parse(event.body || "{}");
+      if (body.quantity && Number.isInteger(body.quantity) && body.quantity > 0) {
+        quantity = body.quantity;
+      }
+    } catch (e) {
+      // If body parsing fails, use default quantity of 1
+      console.warn("Failed to parse request body, using default quantity");
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
         {
           // Price ID you create in Stripe Dashboard for "5 scans for $10"
           price: process.env.STRIPE_PRICE_ID_5_SCANS,
-          quantity: 1,
+          quantity: quantity,
         },
       ],
-      success_url: "https://YOUR_NETLIFY_SITE_URL/?checkout=success",
+      success_url: `https://YOUR_NETLIFY_SITE_URL/?checkout=success&quantity=${quantity}`,
       cancel_url: "https://YOUR_NETLIFY_SITE_URL/?checkout=cancel",
     });
 

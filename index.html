@@ -20,7 +20,15 @@
     <div class="header-actions">
       <div class="credits-box">
         <span id="credits-label">Credits: 0</span>
-        <button id="buy-credits-btn" type="button">Buy 5 scans – $10</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <select id="scan-quantity" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+            <option value="1">5 scans – $10</option>
+            <option value="2">10 scans – $20</option>
+            <option value="3">15 scans – $30</option>
+            <option value="4">20 scans – $40</option>
+          </select>
+          <button id="buy-credits-btn" type="button">Buy Credits</button>
+        </div>
       </div>
       <span class="beta-pill">MVP</span>
     </div>

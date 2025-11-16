@@ -453,25 +453,49 @@ function runNearbySearch(centerLatLng, radiusMeters, keyword, filters) {
 
 // ---------- Stripe checkout helper ----------
 
-async function startCheckout() {
+async function startCheckout(quantity = 1) {
   const buyBtn = document.getElementById("buy-credits-btn");
   if (!stripe) {
     alert("Stripe is not initialized.");
     return;
   }
+
+  // Check if running locally
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    alert("Checkout is not available when running locally. Please deploy to Netlify to test the checkout flow.\n\nTo test locally, you need to run 'netlify dev' instead of using a file server.");
+    return;
+  }
+
   try {
     if (buyBtn) {
       buyBtn.disabled = true;
       buyBtn.textContent = "Redirecting...";
     }
 
+    console.log("Starting checkout with quantity:", quantity);
+
     const res = await fetch("/.netlify/functions/create-checkout-session", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ quantity }),
     });
 
+    console.log("Response status:", res.status);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("Server error:", errorText);
+      alert(`Server error (${res.status}): ${errorText}`);
+      return;
+    }
+
     const data = await res.json();
+    console.log("Response data:", data);
+
     if (!data.sessionId) {
-      alert("Unable to start checkout.");
+      alert("Unable to start checkout - no session ID received.");
       return;
     }
 
@@ -479,15 +503,16 @@ async function startCheckout() {
       sessionId: data.sessionId,
     });
     if (error) {
+      console.error("Stripe redirect error:", error);
       alert(error.message || "Checkout failed.");
     }
   } catch (err) {
-    console.error(err);
-    alert("Error starting checkout.");
+    console.error("Checkout error:", err);
+    alert(`Error starting checkout: ${err.message}\n\nCheck the browser console for details.`);
   } finally {
     if (buyBtn) {
       buyBtn.disabled = false;
-      buyBtn.textContent = "Buy 5 scans – $10";
+      buyBtn.textContent = "Buy Credits";
     }
   }
 }
@@ -495,23 +520,30 @@ async function startCheckout() {
 // ---------- DOM wiring ----------
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Stripe (replace with your publishable key)
-  stripe = Stripe("pk_live_51QMlanR3Sx8fW7tugxWjTIuMH9yTvxBMm8qvBmcZckZgCwhFTcaRskzBl6vhwJ6VPhYb8xj58FIWF4MXG46fpWMF00jfF8vBqpE");
+  // Initialize Stripe with publishable key
+  stripe = Stripe("pk_live_51QMlanR3Sx8fW7tugxWjTIuMH9yTvxBMm8qvBmcZckZgCwhFTcaRskzBl6vhwJ6VPhYb8xj58FIWF4MXG46f6pWMF00jfF8vBqp");
 
   loadCreditsFromStorage();
 
-  // If coming back from a successful checkout (?checkout=success), add 5 credits
+  // If coming back from a successful checkout (?checkout=success), add credits
   const params = new URLSearchParams(window.location.search);
   if (params.get("checkout") === "success") {
-    currentCredits += 5;
+    // Get quantity from URL, default to 1 if not present (each quantity = 5 scans)
+    const quantity = parseInt(params.get("quantity") || "1", 10);
+    const creditsToAdd = quantity * 5; // Each purchase gives 5 scans
+    currentCredits += creditsToAdd;
     updateCreditsUI();
     // Clean the URL
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
   const buyBtn = document.getElementById("buy-credits-btn");
+  const quantitySelect = document.getElementById("scan-quantity");
   if (buyBtn) {
-    buyBtn.addEventListener("click", startCheckout);
+    buyBtn.addEventListener("click", () => {
+      const quantity = quantitySelect ? parseInt(quantitySelect.value, 10) : 1;
+      startCheckout(quantity);
+    });
   }
 
   const searchBtn = document.getElementById("search-btn");
