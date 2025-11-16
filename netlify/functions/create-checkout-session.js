@@ -19,6 +19,11 @@ exports.handler = async (event) => {
       console.warn("Failed to parse request body, using default quantity");
     }
 
+    // Get the site URL from headers (works for both local dev and production)
+    const protocol = event.headers["x-forwarded-proto"] || "http";
+    const host = event.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -28,8 +33,8 @@ exports.handler = async (event) => {
           quantity: quantity,
         },
       ],
-      success_url: `https://YOUR_NETLIFY_SITE_URL/?checkout=success&quantity=${quantity}`,
-      cancel_url: "https://YOUR_NETLIFY_SITE_URL/?checkout=cancel",
+      success_url: `${baseUrl}/?checkout=success&quantity=${quantity}`,
+      cancel_url: `${baseUrl}/?checkout=cancel`,
     });
 
     return {
