@@ -7,7 +7,7 @@ exports.handler = async () => {
       payment_method_types: ['card'],
       line_items: [
         {
-          price: 'price_1TSyqzRSs8W7V7uudWYW81N', // <-- YOUR PRICE ID
+          price: 'price_1STyqzR3Sx8fW7tudVvWY81N', // <-- YOUR PRICE ID
           quantity: 1,
         },
       ],
