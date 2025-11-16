@@ -1,48 +1,27 @@
-// netlify/functions/create-checkout-session.js
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
+exports.handler = async () => {
   try {
-    // Parse the request body to get quantity
-    let quantity = 1;
-    try {
-      const body = JSON.parse(event.body || "{}");
-      if (body.quantity && Number.isInteger(body.quantity) && body.quantity > 0) {
-        quantity = body.quantity;
-      }
-    } catch (e) {
-      // If body parsing fails, use default quantity of 1
-      console.warn("Failed to parse request body, using default quantity");
-    }
-
-    // Get the site URL from headers (works for both local dev and production)
-    const protocol = event.headers["x-forwarded-proto"] || "http";
-    const host = event.headers.host;
-    const baseUrl = `${protocol}://${host}`;
-
     const session = await stripe.checkout.sessions.create({
-      mode: "payment",
+      mode: 'payment',
+      payment_method_types: ['card'],
       line_items: [
         {
-          // Price ID you create in Stripe Dashboard for "5 scans for $10"
-          price: process.env.STRIPE_PRICE_ID_5_SCANS,
-          quantity: quantity,
+          price: 'price_1TSyqzRSs8W7V7uudWYW81N', // <-- YOUR PRICE ID
+          quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/?checkout=success&quantity=${quantity}`,
-      cancel_url: `${baseUrl}/?checkout=cancel`,
+      success_url: 'https://websiteleads.netlify.app/success.html',
+      cancel_url: 'https://websiteleads.netlify.app/cancel.html',
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ sessionId: session.id }),
+      body: JSON.stringify({ id: session.id }),
     };
   } catch (err) {
-    console.error(err);
+    console.error('Stripe error:', err);
+
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message }),
