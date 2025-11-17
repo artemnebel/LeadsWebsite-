@@ -460,12 +460,6 @@ async function startCheckout(quantity = 1) {
     return;
   }
 
-  // Check if running locally
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    alert("Checkout is not available when running locally. Please deploy to Netlify to test the checkout flow.\n\nTo test locally, you need to run 'netlify dev' instead of using a file server.");
-    return;
-  }
-
   try {
     if (buyBtn) {
       buyBtn.disabled = true;
@@ -494,13 +488,15 @@ async function startCheckout(quantity = 1) {
     const data = await res.json();
     console.log("Response data:", data);
 
-    if (!data.sessionId) {
+    // Handle both 'sessionId' and 'id' response formats
+    const sessionId = data.sessionId || data.id;
+    if (!sessionId) {
       alert("Unable to start checkout - no session ID received.");
       return;
     }
 
     const { error } = await stripe.redirectToCheckout({
-      sessionId: data.sessionId,
+      sessionId: sessionId,
     });
     if (error) {
       console.error("Stripe redirect error:", error);
