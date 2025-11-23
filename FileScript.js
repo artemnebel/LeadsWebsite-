@@ -36,19 +36,79 @@ window.LeadExporter = (function () {
         )}`
       : "";
 
+    // Determine other platforms from website URL
+    const website = details.website || "";
+    const otherPlatforms = getOtherPlatforms(website);
+
     const idKey = makeIdKey(details);
 
-    return { idKey, name, address, phone, rating, reviews, mapsUrl };
+    return { idKey, name, address, phone, rating, reviews, mapsUrl, otherPlatforms };
+  }
+
+  function getOtherPlatforms(url) {
+    if (!url) return "";
+
+    const lower = url.toLowerCase();
+    const platforms = [];
+
+    if (lower.includes("facebook.com") || lower.includes("fb.com")) {
+      platforms.push("Facebook");
+    }
+    if (lower.includes("instagram.com")) {
+      platforms.push("Instagram");
+    }
+    if (lower.includes("tiktok.com")) {
+      platforms.push("TikTok");
+    }
+    if (lower.includes("yelp.com")) {
+      platforms.push("Yelp");
+    }
+    if (lower.includes("tripadvisor.com")) {
+      platforms.push("TripAdvisor");
+    }
+    if (lower.includes("grubhub.com")) {
+      platforms.push("GrubHub");
+    }
+    if (lower.includes("doordash.com")) {
+      platforms.push("DoorDash");
+    }
+    if (lower.includes("ubereats.com")) {
+      platforms.push("UberEats");
+    }
+    if (lower.includes("seamless.com") || lower.includes("postmates.com")) {
+      platforms.push("Delivery Site");
+    }
+    if (lower.includes("opentable.com")) {
+      platforms.push("OpenTable");
+    }
+    if (lower.includes("toasttab.com")) {
+      platforms.push("ToastTab");
+    }
+
+    return platforms.join(", ");
   }
 
   function addLead(details) {
     const lead = normalizeDetails(details);
     if (!lead.idKey) return;
+
+    // Check if this is a duplicate
+    const isDuplicate = leadsById.has(lead.idKey);
+    if (isDuplicate) {
+      console.log('Skipping duplicate:', lead.name);
+      return; // Don't add duplicates
+    }
+
     leadsById.set(lead.idKey, lead);
+    console.log('Added lead:', lead.name, '(Total:', leadsById.size, ')');
   }
 
   function clearLeads() {
     leadsById.clear();
+  }
+
+  function getLeadCount() {
+    return leadsById.size;
   }
 
   function csvEscape(value) {
@@ -61,13 +121,14 @@ window.LeadExporter = (function () {
   }
 
   function buildCsv() {
-    // New header: NO place id, NO website
+    // Header with Other Platforms column
     const header = [
       "Name",
       "Address",
       "Phone",
       "Rating",
       "Reviews",
+      "Other Platforms",
       "Google Maps",
     ];
     const rows = [header.join(",")];
@@ -84,6 +145,7 @@ window.LeadExporter = (function () {
         lead.phone,
         lead.rating,
         lead.reviews,
+        lead.otherPlatforms,
         mapsFormula,
       ].map(csvEscape);
 
@@ -109,6 +171,9 @@ window.LeadExporter = (function () {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    // Show success message with count
+    alert(`Successfully exported ${leadsById.size} unique leads to ${filename}`);
   }
 
   // Wire up button when DOM is ready
@@ -123,5 +188,6 @@ window.LeadExporter = (function () {
     addLead,
     clearLeads,
     downloadCsv,
+    getLeadCount,
   };
 })();

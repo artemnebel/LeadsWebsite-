@@ -16,7 +16,7 @@ let noRealWebsiteCount = 0;
 
 // Scan limit
 const SCANS_KEY = "lf_scans_used";
-const MAX_SCANS = 3;
+const MAX_SCANS = 10; // Production limit
 let scansUsed = 0;
 
 // ---------- Scan limit helpers ----------
@@ -63,18 +63,43 @@ function updateRadiusLabel() {
   el.textContent = `${miles.toFixed(1)} mi`;
 }
 
+let loadingInterval = null;
+
 function updateResultsSummary(statusText) {
   const el = document.getElementById("results-summary");
-  if (!el) return;
+  const container = document.getElementById("results-summary-container");
+  const addBtn = document.getElementById("add-to-csv-btn");
+  if (!el || !container) return;
+
+  // Clear any existing loading animation
+  if (loadingInterval) {
+    clearInterval(loadingInterval);
+    loadingInterval = null;
+  }
 
   if (statusText) {
+    container.style.display = "flex";
     el.style.display = "block";
-    el.textContent = statusText;
+    if (addBtn) addBtn.style.display = "none";
+
+    // Animate "Searching..." with dots
+    if (statusText.toLowerCase().includes('searching')) {
+      let dotCount = 0;
+      el.textContent = "Searching";
+      loadingInterval = setInterval(() => {
+        dotCount = (dotCount + 1) % 4;
+        el.textContent = "Searching" + ".".repeat(dotCount);
+      }, 500);
+    } else {
+      el.textContent = statusText;
+    }
     return;
   }
 
   if (resultsCount === 0) {
+    container.style.display = "flex";
     el.style.display = "block";
+    if (addBtn) addBtn.style.display = "none";
     el.textContent = "No businesses found for this search.";
     return;
   }
@@ -84,8 +109,12 @@ function updateResultsSummary(statusText) {
       ? ` • ${noRealWebsiteCount} with no real website`
       : "";
 
+  container.style.display = "flex";
   el.style.display = "block";
   el.textContent = `Found ${resultsCount} businesses${leadPart}.`;
+
+  // Show "Add to CSV" button when there are results
+  if (addBtn) addBtn.style.display = "block";
 }
 
 // Offset helper
@@ -228,6 +257,7 @@ function createMarkerFromDetails(details) {
   const marker = new google.maps.Marker({
     map: map,
     position: details.geometry.location,
+    animation: google.maps.Animation.DROP, // Animate pin dropping
   });
 
   resultsCount += 1;
@@ -342,7 +372,7 @@ function createOrUpdateCircle() {
       ? selectedCenter
       : new google.maps.LatLng(selectedCenter.lat, selectedCenter.lng);
 
-  const defaultRadiusMeters = milesToMeters(3.0);
+  const defaultRadiusMeters = milesToMeters(5.0); // Default 5 miles
   const radiusMeters = searchCircle ? searchCircle.getRadius() : defaultRadiusMeters;
 
   if (!centerMarker) {
@@ -350,6 +380,14 @@ function createOrUpdateCircle() {
       map,
       position: centerLatLng,
       title: "Search center",
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: "#000000",
+        fillOpacity: 1,
+        strokeColor: "#FFFFFF",
+        strokeWeight: 2,
+      },
     });
   } else {
     centerMarker.setPosition(centerLatLng);
@@ -370,6 +408,13 @@ function createOrUpdateCircle() {
     });
 
     searchCircle.addListener("radius_changed", () => {
+      const currentRadius = searchCircle.getRadius();
+      const maxRadius = milesToMeters(10);
+
+      if (currentRadius > maxRadius) {
+        searchCircle.setRadius(maxRadius);
+      }
+
       updateRadiusLabel();
     });
 
@@ -402,16 +447,35 @@ function runNearbySearch(centerLatLng, radiusMeters, keyword, filters) {
       return;
     }
 
-    results.forEach((place) => {
+    // Filter and process results
+    const placesToFetch = results.filter((place) => {
       if (filters.minRating > 0 && place.rating && place.rating < filters.minRating) {
-        return;
+        return false;
       }
-
       if (!place.place_id || seenPlaceIds.has(place.place_id)) {
-        return;
+        return false;
       }
       seenPlaceIds.add(place.place_id);
+      return true;
+    });
 
+    // Limit to 15 places for instant results
+    const MAX_PLACES_TO_CHECK = 15;
+    const limitedPlaces = placesToFetch.slice(0, MAX_PLACES_TO_CHECK);
+
+    console.log(`Processing ${limitedPlaces.length} businesses (${placesToFetch.length} total found)...`);
+
+    // If no places to check, show no results immediately
+    if (limitedPlaces.length === 0) {
+      updateResultsSummary();
+      return;
+    }
+
+    // Track how many requests have completed
+    let completedRequests = 0;
+
+    // Instant processing - no delays, fire all requests immediately
+    limitedPlaces.forEach((place) => {
       service.getDetails(
         {
           placeId: place.place_id,
@@ -429,17 +493,44 @@ function runNearbySearch(centerLatLng, radiusMeters, keyword, filters) {
           ],
         },
         (details, detailsStatus) => {
-          if (detailsStatus !== "OK" || !details) return;
+          completedRequests++;
+
+          if (detailsStatus !== "OK" || !details) {
+            // Check if all requests are done
+            if (completedRequests === limitedPlaces.length) {
+              updateResultsSummary();
+            }
+            return;
+          }
+
+          console.log('Processing business:', details.name, 'Website:', details.website);
 
           if (filters.mustHavePhone && !details.formatted_phone_number) {
+            console.log('  -> Filtered out: no phone');
+            // Check if all requests are done
+            if (completedRequests === limitedPlaces.length) {
+              updateResultsSummary();
+            }
             return;
           }
 
-          if (filters.onlyNoWebsite && hasRealWebsite(details.website)) {
+          // Only show businesses with NO website at all
+          if (details.website) {
+            console.log('  -> Filtered out: has website');
+            // Check if all requests are done
+            if (completedRequests === limitedPlaces.length) {
+              updateResultsSummary();
+            }
             return;
           }
 
+          console.log('  -> ADDED to results (no website)');
           createMarkerFromDetails(details);
+
+          // Check if all requests are done
+          if (completedRequests === limitedPlaces.length) {
+            updateResultsSummary();
+          }
         }
       );
     });
@@ -456,11 +547,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const categoryInput = document.getElementById("category-input");
   const filterPhoneCheckbox = document.getElementById("filter-phone");
   const filterRatingSelect = document.getElementById("filter-rating");
-  const filterNoWebsiteCheckbox = document.getElementById("filter-no-website");
 
   searchBtn.addEventListener("click", () => {
     if (scansUsed >= MAX_SCANS) {
-      alert("You have used all 3 of your scans. Thank you for trying Local Lead Finder!");
+      alert("You have used all of your scans. Thank you for trying Local Lead Finder!");
       return;
     }
 
@@ -478,21 +568,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const centerLatLng = searchCircle.getCenter();
     let radiusMeters = searchCircle.getRadius();
 
-    const MAX_RADIUS = 50000;
+    const MAX_RADIUS = milesToMeters(10); // Max 10 miles
     if (radiusMeters > MAX_RADIUS) {
       radiusMeters = MAX_RADIUS;
-      alert("Google's Places API max radius is 50 km. Using 50 km for the search.");
+      searchCircle.setRadius(MAX_RADIUS);
+      alert("Maximum radius is 10 miles. Radius has been adjusted.");
     }
 
     const filters = {
       mustHavePhone: filterPhoneCheckbox.checked,
       minRating: parseFloat(filterRatingSelect.value) || 0,
-      onlyNoWebsite: filterNoWebsiteCheckbox.checked,
     };
 
     // Consume one scan per search
     if (!consumeScan()) {
-      alert("You have used all 3 of your scans. Thank you for trying Local Lead Finder!");
+      alert("You have used all of your scans. Thank you for trying Local Lead Finder!");
       return;
     }
 
@@ -500,9 +590,11 @@ document.addEventListener("DOMContentLoaded", () => {
     resultsCount = 0;
     noRealWebsiteCount = 0;
     updateResultsSummary("Searching...");
-    if (window.LeadExporter) {
-      window.LeadExporter.clearLeads();
-    }
+
+    // Don't clear leads anymore - we want to accumulate from multiple searches
+    // if (window.LeadExporter) {
+    //   window.LeadExporter.clearLeads();
+    // }
 
     runNearbySearch(centerLatLng, radiusMeters, keyword, filters);
   });
@@ -512,4 +604,27 @@ document.addEventListener("DOMContentLoaded", () => {
       searchBtn.click();
     }
   });
+
+  // Wire up "Add to CSV" button
+  const addToCsvBtn = document.getElementById("add-to-csv-btn");
+  if (addToCsvBtn) {
+    addToCsvBtn.addEventListener("click", () => {
+      if (resultsCount === 0) {
+        alert("No results to add. Run a search first.");
+        return;
+      }
+
+      // Results are already added to LeadExporter automatically
+      // Just provide feedback and hide the button
+      addToCsvBtn.textContent = "✓ Added to CSV";
+      addToCsvBtn.style.background = "#059669"; // Green to indicate success
+
+      setTimeout(() => {
+        addToCsvBtn.style.display = "none";
+        // Reset for next search
+        addToCsvBtn.textContent = "Add to CSV";
+        addToCsvBtn.style.background = "#8b5cf6"; // Back to purple
+      }, 1500);
+    });
+  }
 });

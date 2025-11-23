@@ -10,7 +10,7 @@
   <header class="app-header">
     <div class="header-content">
       <div class="scans-badge">
-        <span id="credits-label">3/3 Scans</span>
+        <span id="credits-label">999/999 Scans</span>
       </div>
     </div>
   </header>
@@ -34,7 +34,7 @@
 
           <div class="filters-row">
             <label class="checkbox-label">
-              <input type="checkbox" id="filter-phone" checked />
+              <input type="checkbox" id="filter-phone" />
               Must have phone number
             </label>
 
@@ -48,11 +48,6 @@
                 <option value="4.5">4.5+</option>
               </select>
             </div>
-
-            <label class="checkbox-label">
-              <input type="checkbox" id="filter-no-website" />
-              Only no real website
-            </label>
           </div>
 
           <div class="toolbar-footer">
@@ -62,7 +57,7 @@
             </p>
             <div class="radius-display">
               <span class="radius-label">Radius:</span>
-              <span id="radius-value" class="radius-value">3.0 mi</span>
+              <span id="radius-value" class="radius-value">5.0 mi</span>
             </div>
             <div class="export-row">
               <button id="download-csv-btn" type="button">Download CSV</button>
@@ -71,7 +66,10 @@
         </div>
       </section>
 
-      <div id="results-summary" class="results-summary" style="display: none;"></div>
+      <div id="results-summary-container">
+        <div id="results-summary" class="results-summary"></div>
+        <button id="add-to-csv-btn" class="add-to-csv-btn">Add to CSV</button>
+      </div>
 
       <section id="map-container">
         <div id="map"></div>
