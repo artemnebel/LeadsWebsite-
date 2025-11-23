@@ -5,32 +5,13 @@
   <title>Local Lead Finder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="style.css" />
-  <!-- Stripe.js (publishable key is used in script.js) -->
-  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
   <header class="app-header">
-    <div class="brand">
-      <div class="brand-mark">LF</div>
-      <div class="brand-text">
-        <div class="brand-title">Local Lead Finder</div>
-        <div class="brand-subtitle">Discover local businesses without real websites</div>
+    <div class="header-content">
+      <div class="scans-badge">
+        <span id="credits-label">3/3 Scans</span>
       </div>
-    </div>
-    <div class="header-actions">
-      <div class="credits-box">
-        <span id="credits-label">Credits: 0</span>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <select id="scan-quantity" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-            <option value="1">5 scans – $10</option>
-            <option value="2">10 scans – $20</option>
-            <option value="3">15 scans – $30</option>
-            <option value="4">20 scans – $40</option>
-          </select>
-          <button id="buy-credits-btn" type="button">Buy Credits</button>
-        </div>
-      </div>
-      <span class="beta-pill">MVP</span>
     </div>
   </header>
 
@@ -79,9 +60,10 @@
               Click on the map to set the search center. Drag the blue circle or its edge to adjust
               the radius.
             </p>
-            <p class="hint-text">
-              Current radius: <span id="radius-value">3.0 mi</span>
-            </p>
+            <div class="radius-display">
+              <span class="radius-label">Radius:</span>
+              <span id="radius-value" class="radius-value">3.0 mi</span>
+            </div>
             <div class="export-row">
               <button id="download-csv-btn" type="button">Download CSV</button>
             </div>
@@ -89,9 +71,7 @@
         </div>
       </section>
 
-      <div id="results-summary" class="results-summary">
-        No search yet. Choose a category and area to begin.
-      </div>
+      <div id="results-summary" class="results-summary" style="display: none;"></div>
 
       <section id="map-container">
         <div id="map"></div>

@@ -6,7 +6,6 @@ let searchCircle = null;
 let selectedCenter = null;
 let infoWindow = null;
 let currentMarker = null; // which marker's popup is open
-let stripe = null;
 
 // Track which places we've already shown (per search)
 const seenPlaceIds = new Set();
@@ -15,42 +14,33 @@ const seenPlaceIds = new Set();
 let resultsCount = 0;
 let noRealWebsiteCount = 0;
 
-// Credits / trial
-const CREDITS_KEY = "lf_credits";
-const FREE_TRIAL_GRANTED_KEY = "lf_free_trial_granted";
-let currentCredits = 0;
+// Scan limit
+const SCANS_KEY = "lf_scans_used";
+const MAX_SCANS = 3;
+let scansUsed = 0;
 
-// ---------- Credits helpers ----------
+// ---------- Scan limit helpers ----------
 
-function loadCreditsFromStorage() {
-  let stored = parseInt(localStorage.getItem(CREDITS_KEY) || "0", 10);
+function loadScansFromStorage() {
+  let stored = parseInt(localStorage.getItem(SCANS_KEY) || "0", 10);
   if (Number.isNaN(stored) || stored < 0) stored = 0;
-
-  const trialGranted = localStorage.getItem(FREE_TRIAL_GRANTED_KEY) === "true";
-
-  // Give 1 free scan only once per browser (not reset on refresh)
-  if (!trialGranted) {
-    stored += 1;
-    localStorage.setItem(FREE_TRIAL_GRANTED_KEY, "true");
-    localStorage.setItem(CREDITS_KEY, String(stored));
-  }
-
-  currentCredits = stored;
-  updateCreditsUI();
+  scansUsed = stored;
+  updateScansUI();
 }
 
-function updateCreditsUI() {
+function updateScansUI() {
   const label = document.getElementById("credits-label");
   if (label) {
-    label.textContent = `Credits: ${currentCredits}`;
+    const remaining = MAX_SCANS - scansUsed;
+    label.textContent = `${remaining}/${MAX_SCANS} Scans`;
   }
-  localStorage.setItem(CREDITS_KEY, String(currentCredits));
+  localStorage.setItem(SCANS_KEY, String(scansUsed));
 }
 
-function consumeCredit() {
-  if (currentCredits <= 0) return false;
-  currentCredits -= 1;
-  updateCreditsUI();
+function consumeScan() {
+  if (scansUsed >= MAX_SCANS) return false;
+  scansUsed += 1;
+  updateScansUI();
   return true;
 }
 
@@ -67,7 +57,9 @@ function metersToMiles(m) {
 function updateRadiusLabel() {
   const el = document.getElementById("radius-value");
   if (!el || !searchCircle) return;
-  const miles = metersToMiles(searchCircle.getRadius());
+  const radiusMeters = searchCircle.getRadius();
+  const miles = metersToMiles(radiusMeters);
+  console.log('Updating radius:', radiusMeters, 'meters =', miles, 'miles');
   el.textContent = `${miles.toFixed(1)} mi`;
 }
 
@@ -76,11 +68,13 @@ function updateResultsSummary(statusText) {
   if (!el) return;
 
   if (statusText) {
+    el.style.display = "block";
     el.textContent = statusText;
     return;
   }
 
   if (resultsCount === 0) {
+    el.style.display = "block";
     el.textContent = "No businesses found for this search.";
     return;
   }
@@ -90,6 +84,7 @@ function updateResultsSummary(statusText) {
       ? ` • ${noRealWebsiteCount} with no real website`
       : "";
 
+  el.style.display = "block";
   el.textContent = `Found ${resultsCount} businesses${leadPart}.`;
 }
 
@@ -451,96 +446,11 @@ function runNearbySearch(centerLatLng, radiusMeters, keyword, filters) {
   });
 }
 
-// ---------- Stripe checkout helper ----------
-
-async function startCheckout(quantity = 1) {
-  const buyBtn = document.getElementById("buy-credits-btn");
-  if (!stripe) {
-    alert("Stripe is not initialized.");
-    return;
-  }
-
-  try {
-    if (buyBtn) {
-      buyBtn.disabled = true;
-      buyBtn.textContent = "Redirecting...";
-    }
-
-    console.log("Starting checkout with quantity:", quantity);
-
-    const res = await fetch("/.netlify/functions/create-checkout-session", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ quantity }),
-    });
-
-    console.log("Response status:", res.status);
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("Server error:", errorText);
-      alert(`Server error (${res.status}): ${errorText}`);
-      return;
-    }
-
-    const data = await res.json();
-    console.log("Response data:", data);
-
-    // Handle both 'sessionId' and 'id' response formats
-    const sessionId = data.sessionId || data.id;
-    if (!sessionId) {
-      alert("Unable to start checkout - no session ID received.");
-      return;
-    }
-
-    const { error } = await stripe.redirectToCheckout({
-      sessionId: sessionId,
-    });
-    if (error) {
-      console.error("Stripe redirect error:", error);
-      alert(error.message || "Checkout failed.");
-    }
-  } catch (err) {
-    console.error("Checkout error:", err);
-    alert(`Error starting checkout: ${err.message}\n\nCheck the browser console for details.`);
-  } finally {
-    if (buyBtn) {
-      buyBtn.disabled = false;
-      buyBtn.textContent = "Buy Credits";
-    }
-  }
-}
 
 // ---------- DOM wiring ----------
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Stripe with publishable key
-  stripe = Stripe("pk_live_51QMlanR3Sx8fW7tugxWjTIuMH9yTvxBMm8qvBmcZckZgCwhFTcaRskzBl6vhwJ6VPhYb8xj58FIWF4MXG46f6pWMF00jfF8vBqp");
-
-  loadCreditsFromStorage();
-
-  // If coming back from a successful checkout (?checkout=success), add credits
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("checkout") === "success") {
-    // Get quantity from URL, default to 1 if not present (each quantity = 5 scans)
-    const quantity = parseInt(params.get("quantity") || "1", 10);
-    const creditsToAdd = quantity * 5; // Each purchase gives 5 scans
-    currentCredits += creditsToAdd;
-    updateCreditsUI();
-    // Clean the URL
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
-
-  const buyBtn = document.getElementById("buy-credits-btn");
-  const quantitySelect = document.getElementById("scan-quantity");
-  if (buyBtn) {
-    buyBtn.addEventListener("click", () => {
-      const quantity = quantitySelect ? parseInt(quantitySelect.value, 10) : 1;
-      startCheckout(quantity);
-    });
-  }
+  loadScansFromStorage();
 
   const searchBtn = document.getElementById("search-btn");
   const categoryInput = document.getElementById("category-input");
@@ -549,8 +459,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const filterNoWebsiteCheckbox = document.getElementById("filter-no-website");
 
   searchBtn.addEventListener("click", () => {
-    if (currentCredits <= 0) {
-      alert("You are out of scans. Buy more credits to continue.");
+    if (scansUsed >= MAX_SCANS) {
+      alert("You have used all 3 of your scans. Thank you for trying Local Lead Finder!");
       return;
     }
 
@@ -580,9 +490,9 @@ document.addEventListener("DOMContentLoaded", () => {
       onlyNoWebsite: filterNoWebsiteCheckbox.checked,
     };
 
-    // Consume one credit per search
-    if (!consumeCredit()) {
-      alert("You are out of scans. Buy more credits to continue.");
+    // Consume one scan per search
+    if (!consumeScan()) {
+      alert("You have used all 3 of your scans. Thank you for trying Local Lead Finder!");
       return;
     }
 
